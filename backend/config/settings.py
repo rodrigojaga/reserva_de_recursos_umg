@@ -144,4 +144,4 @@ DATABASES = {
 }
 
 #autenticacion del usuario para la API
-AUTH_USER_MODEL = 'api.Usuario'
+#AUTH_USER_MODEL = 'api.Usuario'

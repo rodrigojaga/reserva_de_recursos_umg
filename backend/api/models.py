@@ -71,63 +71,21 @@ class TipoRecurso(models.Model):
     def __str__(self):
         return self.nombre
 
-
-class UsuarioManager(BaseUserManager):
-    def create_user(self, correo, password=None, **extra):
-        if not correo:
-            raise ValueError("El correo es obligatorio.")
-        correo = self.normalize_email(correo)
-        user = self.model(correo=correo, **extra)
-        user.set_password(password)
-        user.save(using=self._db)
-        return user
-
-    def create_superuser(self, correo, password=None, **extra):
-        extra.setdefault("is_staff", True)
-        extra.setdefault("is_superuser", True)
-        return self.create_user(correo, password, **extra)
-
-
-
-class Usuario(AbstractUser):
-    username        = None
+# ──────────────────────────────────────────────
+# USUARIO
+# ──────────────────────────────────────────────
+class Usuario(models.Model):
+    rol             = models.ForeignKey(Rol, on_delete=models.RESTRICT, related_name="usuarios")
     correo          = models.EmailField(max_length=100, unique=True)
     nombre_completo = models.CharField(max_length=150)
-    rol             = models.ForeignKey(
-        Rol, on_delete=models.RESTRICT,
-        related_name="usuarios", db_column="id_rol"
-    )
-    activo         = models.BooleanField(default=True)
-    fecha_registro = models.DateTimeField(default=timezone.now)
-
-    USERNAME_FIELD  = "correo"
-    REQUIRED_FIELDS = ["nombre_completo"]
-    objects         = UsuarioManager()
+    activo          = models.BooleanField(default=True)
+    fecha_registro  = models.DateTimeField(default=timezone.now)
 
     class Meta:
         db_table = "usuario"
-        verbose_name = "Usuario"
-        verbose_name_plural = "Usuarios"
-        indexes = [models.Index(fields=["correo"], name="idx_usuario_correo")]
 
     def __str__(self):
         return f"{self.nombre_completo} <{self.correo}>"
-
-    def reservas_activas_count(self):
-        """Número de reservas activas (no canceladas) del usuario."""
-        return self.reservas.exclude(estado__nombre__iexact="Cancelada").count()
-
-    def tiene_solapamiento(self, recurso, fecha, hora_inicio, hora_fin, excluir_pk=None):
-        """True si el usuario ya tiene reserva en ese tramo para ese recurso."""
-        qs = self.reservas.exclude(estado__nombre__iexact="Cancelada").filter(
-            recurso=recurso,
-            fecha_reserva=fecha,
-            hora_inicio__lt=hora_fin,
-            hora_fin__gt=hora_inicio,
-        )
-        if excluir_pk:
-            qs = qs.exclude(pk=excluir_pk)
-        return qs.exists()
 
 
 # ──────────────────────────────────────────────
