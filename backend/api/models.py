@@ -1,5 +1,8 @@
 from django.db import models
+import random
+import string
 from datetime import date, datetime
+
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
@@ -69,6 +72,20 @@ class TipoRecurso(models.Model):
         return self.nombre
 
 
+class UsuarioManager(BaseUserManager):
+    def create_user(self, correo, password=None, **extra):
+        if not correo:
+            raise ValueError("El correo es obligatorio.")
+        correo = self.normalize_email(correo)
+        user = self.model(correo=correo, **extra)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, correo, password=None, **extra):
+        extra.setdefault("is_staff", True)
+        extra.setdefault("is_superuser", True)
+        return self.create_user(correo, password, **extra)
 
 
 
@@ -162,7 +179,7 @@ class Recurso(models.Model):
 
 def _generar_codigo_unico():
     """
-    Genera un código único en formato RES-A3F2-YYYY-MM-DD.
+    Genera un código alfanumérico único en formato RES-A3F2-YYYY-MM-DD.
     """
     return "XXXXXXX"
 
