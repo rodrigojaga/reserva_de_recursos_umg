@@ -145,3 +145,8 @@ DATABASES = {
 
 #autenticacion del usuario para la API
 #AUTH_USER_MODEL = 'api.Usuario'
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    'DEFAULT_PERMISSION_CLASSES': [],
+}

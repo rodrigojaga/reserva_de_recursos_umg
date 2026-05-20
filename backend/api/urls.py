@@ -1,6 +1,6 @@
 from django.urls import path
-from .views import inicio
-
+from .views import RecursoListView
+ 
 urlpatterns = [
-    path('', inicio),
+    path("recursos/", RecursoListView.as_view(), name="recurso-list"),
 ]
