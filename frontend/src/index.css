@@ -1,0 +1,33 @@
+
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  min-height: 100vh;
+  background-color: #ffffff !important; /* Fuerza el fondo blanco limpio */
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  color: #333333;
+}
+
+#root {
+  width: 100% !important; /* Quita los 1126px y expande al ancho completo */
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: #ffffff;
+}
+
+/* Estilos básicos para textos */
+h1, h2, h3 {
+  color: #1e3d6b; /* El azul marino de tus wireframes */
+}
