@@ -6,7 +6,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import EstadoReserva, Recurso, Reserva
+from .models import EstadoReserva, Recurso, Reserva, Usuario
 from .serializers import RecursoSerializer, ReservaSerializer, ReservaCrearSerializer
 
 LIMITE_RESERVAS_ACTIVAS = 5  # máximo de reservas activas por usuario
@@ -133,10 +133,9 @@ class ReservaCreateView(APIView):
 
         try:
             with transaction.atomic():
-                # ── SELECT FOR UPDATE ─────────────────────────────────────
                 # Bloquea la fila del recurso mientras dura esta transacción.
                 # Si dos requests llegan al mismo tiempo, el segundo esperará
-                # hasta que el primero termine, evitando reservas duplicadas.
+                # hasta que el primero termine.
                 recurso_bloqueado = (
                     Recurso.objects.select_for_update().get(pk=recurso.pk)
                 )
@@ -190,7 +189,7 @@ class ReservaCreateView(APIView):
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     )
 
-                # Crear la reserva — el código se genera automáticamente
+                # Crear la reserva, el código se genera automáticamente
                 reserva = Reserva.objects.create(
                     usuario=usuario,
                     recurso=recurso_bloqueado,
@@ -286,3 +285,169 @@ class ReservaCancelarView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({"mensaje": "Reserva cancelada correctamente."})
+    
+ 
+def _verificar_admin(request):
+    """
+    Verificación de admin.
+    El cliente debe enviar el header: X-Admin-Key: admin@miumg.edu.gt
+    """
+    admin_key = request.headers.get("X-Admin-Key")
+    if not admin_key:
+        return False
+    return Usuario.objects.filter(
+        correo=admin_key,
+        rol__nombre__iexact="admin",
+        activo=True
+    ).exists()
+ 
+ 
+def _get_reservas_filtradas(request):
+    """
+    Aplica los filtros comunes para los endpoints de admin.
+    Filtros: fecha, fecha_inicio, fecha_fin, recurso, usuario, estado
+    """
+    qs = Reserva.objects.select_related(
+        "usuario", "recurso", "estado"
+    ).order_by("-fecha_reserva", "-hora_inicio")
+ 
+    fecha = request.query_params.get("fecha")
+    if fecha:
+        qs = qs.filter(fecha_reserva=fecha)
+ 
+    fecha_inicio = request.query_params.get("fecha_inicio")
+    if fecha_inicio:
+        qs = qs.filter(fecha_reserva__gte=fecha_inicio)
+ 
+    fecha_fin = request.query_params.get("fecha_fin")
+    if fecha_fin:
+        qs = qs.filter(fecha_reserva__lte=fecha_fin)
+ 
+    recurso = request.query_params.get("recurso")
+    if recurso:
+        qs = qs.filter(recurso_id=recurso)
+ 
+    usuario = request.query_params.get("usuario")
+    if usuario:
+        qs = qs.filter(usuario_id=usuario)
+ 
+    estado = request.query_params.get("estado")
+    if estado:
+        qs = qs.filter(estado_id=estado)
+ 
+    return qs
+ 
+ 
+class AdminReservaListView(APIView):
+    """
+    GET /api/admin/reservas/
+ 
+    Lista paginada de TODAS las reservas.
+    Requiere header: X-Admin-Key: admin@miumg.edu.gt
+ 
+    Filtros:
+      ?fecha=2025-08-01
+      ?fecha_inicio=2025-08-01
+      ?fecha_fin=2025-08-31
+      ?recurso=1
+      ?usuario=1
+      ?estado=1
+      ?page=1
+      ?page_size=20      
+ 
+    Respuesta JSON:
+    {
+        "count": 100,
+        "page": 1,
+        "page_size": 20,
+        "total_pages": 5,
+        "results": [ { ... } ]
+    }
+    """
+ 
+    def get(self, request):
+        if not _verificar_admin(request):
+            return Response(
+                {"error": "Acceso denegado. Se requiere header X-Admin-Key válido."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+ 
+        qs = _get_reservas_filtradas(request)
+ 
+        try:
+            page      = max(1, int(request.query_params.get("page", 1)))
+            page_size = min(100, max(1, int(request.query_params.get("page_size", 20))))
+        except ValueError:
+            page, page_size = 1, 20
+ 
+        total   = qs.count()
+        start   = (page - 1) * page_size
+        results = qs[start: start + page_size]
+ 
+        serializer = ReservaSerializer(results, many=True)
+        return Response({
+            "count":       total,
+            "page":        page,
+            "page_size":   page_size,
+            "total_pages": max(1, -(-total // page_size)),
+            "results":     serializer.data,
+        })
+ 
+ 
+class AdminReservaCSVView(APIView):
+    """
+    GET /api/admin/reservas/csv/
+ 
+    Exporta a CSV las reservas filtradas.
+    Requiere header: X-Admin-Key: admin@miumg.edu.gt
+    Acepta los mismos filtros que /api/admin/reservas/
+ 
+    Descarga el archivo: reservas.csv
+    """
+ 
+    def get(self, request):
+        if not _verificar_admin(request):
+            return Response(
+                {"error": "Acceso denegado. Se requiere header X-Admin-Key válido."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+ 
+        qs = _get_reservas_filtradas(request)
+ 
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="reservas.csv"'
+ 
+        writer = csv.writer(response)
+ 
+        # Encabezados
+        writer.writerow([
+            "ID",
+            "Código",
+            "Usuario",
+            "Correo",
+            "Recurso",
+            "Estado",
+            "Fecha",
+            "Hora Inicio",
+            "Hora Fin",
+            "Duración (min)",
+            "Fecha Creación",
+        ])
+ 
+        # Filas
+        for r in qs:
+            writer.writerow([
+                r.id,
+                r.codigo_reservacion,
+                r.usuario.nombre_completo,
+                r.usuario.correo,
+                r.recurso.nombre,
+                r.estado.nombre,
+                r.fecha_reserva,
+                r.hora_inicio.strftime("%H:%M"),
+                r.hora_fin.strftime("%H:%M"),
+                r.duracion_minutos(),
+                r.fecha_creacion.strftime("%Y-%m-%d %H:%M"),
+            ])
+ 
+        return response

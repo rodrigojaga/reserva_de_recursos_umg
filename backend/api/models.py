@@ -139,7 +139,16 @@ def _generar_codigo_unico():
     """
     Genera un código alfanumérico único en formato RES-A3F2-YYYY-MM-DD.
     """
-    return "XXXXXXX"
+    hoy = date.today().strftime("%Y-%m-%d")
+    for _ in range(10):
+        parte_aleatoria = "".join(
+            random.choices(string.ascii_uppercase + string.digits, k=4)
+        )
+        codigo = f"RES-{parte_aleatoria}-{hoy}"
+        if not Reserva.objects.filter(codigo_reservacion=codigo).exists():
+            return codigo
+    raise ValueError("No se pudo generar un código único. Intente de nuevo.")
+
 
 
 # ──────────────────────────────────────────────

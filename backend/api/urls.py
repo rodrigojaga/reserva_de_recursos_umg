@@ -4,6 +4,8 @@ from .views import (
     ReservaCreateView,
     ReservaListView,
     ReservaCancelarView,
+    AdminReservaListView,
+    AdminReservaCSVView,
 )
  
 urlpatterns = [
@@ -14,4 +16,8 @@ urlpatterns = [
     path("reservas/",                    ReservaListView.as_view(),    name="reserva-list"),
     path("reservas/crear/",              ReservaCreateView.as_view(),  name="reserva-crear"),
     path("reservas/<int:pk>/cancelar/",  ReservaCancelarView.as_view(), name="reserva-cancelar"),
+
+    #Tarea 5
+    path("admin/reservas/",              AdminReservaListView.as_view(), name="admin-reserva-list"),
+    path("admin/reservas/csv/",          AdminReservaCSVView.as_view(),  name="admin-reserva-csv"),
 ]

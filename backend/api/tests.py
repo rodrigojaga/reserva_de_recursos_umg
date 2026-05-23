@@ -175,3 +175,82 @@ class ReservaConcurrenciaTest(TransactionTestCase):
         self.assertEqual(
             Reserva.objects.filter(fecha_reserva=self.fecha).count(), 1
         )
+
+
+# ──────────────────────────────────────────────
+# Tests del generador de código único
+# ──────────────────────────────────────────────
+ 
+from unittest.mock import patch
+from .models import _generar_codigo_unico
+ 
+ 
+class CodigoGeneracionTest(TestCase):
+ 
+    def test_formato_correcto(self):
+        """El código debe tener el formato RES-XXXX-YYYY-MM-DD."""
+        codigo = _generar_codigo_unico()
+        partes = codigo.split("-")
+        self.assertEqual(partes[0], "RES")
+        self.assertEqual(len(partes[1]), 4)   # parte aleatoria
+        self.assertEqual(len(partes[2]), 4)   # año
+        self.assertEqual(len(partes[3]), 2)   # mes
+        self.assertEqual(len(partes[4]), 2)   # día
+ 
+    def test_parte_aleatoria_es_alfanumerica(self):
+        """La parte aleatoria solo debe tener letras mayúsculas y dígitos."""
+        import re
+        codigo = _generar_codigo_unico()
+        parte  = codigo.split("-")[1]
+        self.assertTrue(re.match(r"^[A-Z0-9]{4}$", parte))
+ 
+    def test_codigos_unicos_en_volumen(self):
+        """1000 códigos generados deben ser todos distintos."""
+        codigos = {_generar_codigo_unico() for _ in range(1000)}
+        self.assertEqual(len(codigos), 1000)
+ 
+    def test_reintenta_si_codigo_ya_existe(self):
+        """Si el primer código ya existe en BD, debe generar uno nuevo."""
+        # Crear datos necesarios para tener una reserva en BD
+        rol       = Rol.objects.create(nombre="Test")
+        tipo      = TipoRecurso.objects.create(nombre="Sala", limite_maximo_reservas=1)
+        ubicacion = Ubicacion.objects.create(nombre="Edificio Test")
+        activa    = EstadoReserva.objects.create(nombre="activa")
+        EstadoReserva.objects.create(nombre="cancelada")
+        recurso   = Recurso.objects.create(
+            tipo_recurso=tipo, ubicacion=ubicacion, nombre="Sala Test"
+        )
+        usuario = Usuario.objects.create(
+            correo="test@uni.edu", nombre_completo="Test", rol=rol
+        )
+        reserva = Reserva.objects.create(
+            usuario=usuario, recurso=recurso, estado=activa,
+            fecha_reserva=date.today() + timedelta(days=5),
+            hora_inicio=time(9, 0), hora_fin=time(10, 0),
+        )
+        codigo_existente = reserva.codigo_reservacion
+ 
+        # Forzar que el primer intento devuelva el código que ya existe
+        parte_existente = codigo_existente.split("-")[1]  # ej: "A3F2"
+        llamadas        = {"n": 0}
+        original        = __import__("random").choices
+ 
+        def mock_choices(population, k):
+            llamadas["n"] += 1
+            if llamadas["n"] == 1:
+                return list(parte_existente)  # primer intento = colisión
+            return original(population, k=k)  # segundo intento = aleatorio real
+ 
+        with patch("api.models.random.choices", side_effect=mock_choices):
+            nuevo_codigo = _generar_codigo_unico()
+ 
+        # El código nuevo debe ser distinto al que ya existía
+        self.assertNotEqual(nuevo_codigo, codigo_existente)
+        self.assertEqual(llamadas["n"], 2)  # confirmamos que intentó 2 veces
+ 
+    def test_error_si_todos_los_intentos_fallan(self):
+        """Debe lanzar ValueError si los 10 intentos producen colisión."""
+        with patch("api.models.Reserva.objects") as mock_qs:
+            mock_qs.filter.return_value.exists.return_value = True
+            with self.assertRaises(ValueError):
+                _generar_codigo_unico()
