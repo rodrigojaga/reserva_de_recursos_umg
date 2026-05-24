@@ -1,4 +1,3 @@
-JavaScript
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -16,7 +15,7 @@ const obtenerEstiloLink = (path, currentPath) => {
   };
 };
 
-// 1. NAVBAR EXCLUSIVO PARA USUARIOS 
+// 1. NAVBAR EXCLUSIVO PARA USUARIOS
 export function NavbarUsuario({ usuario }) {
   const location = useLocation();
   return (
@@ -38,7 +37,7 @@ export function NavbarUsuario({ usuario }) {
   );
 }
 
-// 2. NAVBAR EXCLUSIVO PARA ADMINISTRADORES 
+// 2. NAVBAR EXCLUSIVO PARA ADMINISTRADORES
 export function NavbarAdmin({ usuario }) {
   const location = useLocation();
   return (
