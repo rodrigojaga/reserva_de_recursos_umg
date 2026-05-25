@@ -24,7 +24,7 @@ class RecursoListView(APIView):
       ?disponible=true     → true | false
       ?ordering=nombre     → nombre | -nombre | capacidad | -capacidad
       ?page=1
-      ?page_size=10        → máx 50
+      ?page_size=10        
     """
 
     def get(self, request):
