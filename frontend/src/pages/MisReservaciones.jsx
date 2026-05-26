@@ -1,120 +1,118 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+// ================================================
+// MisReservaciones.jsx — Conectado al backend
+// GET /api/reservas/?usuario=X
+// ================================================
 
-// Datos simulados fieles a tu wireframe
-const misReservasBD = [
-  { código: 'RES-A3F2-20261015', recurso: 'Salón A-101', fecha: '15/10/2026', horario: '08:00 - 10:00', estado: 'Activa' },
-  { código: 'RES-B7C1-20261010', recurso: 'Laboratorio de Cómputo 1', fecha: '10/10/2026', horario: '14:00 - 16:00', estado: 'Cancelada' },
-  { código: 'RES-C9D4-20261020', recurso: 'Proyector HD-03', fecha: '20/10/2026', horario: '10:00 - 11:00', estado: 'Activa' },
-];
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useUsuario } from '../context/UsuarioContext';
+import { getReservas, cancelarReserva } from '../services/api';
 
 function MisReservaciones() {
-  const navigate = useNavigate();
+  const navigate        = useNavigate();
+  const { usuario }     = useUsuario();
+  const [reservas, setReservas]   = useState([]);
+  const [cargando, setCargando]   = useState(true);
+  const [error, setError]         = useState('');
+
+  const cargarReservas = async () => {
+    setCargando(true);
+    setError('');
+    try {
+      const res = await getReservas({ usuario: usuario.id });
+      setReservas(res.data.results);
+    } catch {
+      setError('Error al cargar tus reservaciones.');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => { cargarReservas(); }, []);
+
+  const handleCancelar = async (reserva) => {
+    if (!window.confirm(`¿Cancelar la reserva ${reserva.codigo_reservacion}?`)) return;
+    try {
+      await cancelarReserva(reserva.id, usuario.id);
+      cargarReservas(); // recargar la lista
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Error al cancelar.';
+      alert(msg);
+    }
+  };
 
   return (
-    <div style={{ padding: '40px', fontFamily: 'sans-serif', background: '#ffffff', minHeight: '100vh', textAlign: 'left' }}>
-      
-      {/* Encabezado con Título y Botón de Nueva Reserva */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        borderBottom: '1px solid #e5e4e7', 
-        paddingBottom: '20px',
-        marginBottom: '30px' 
-      }}>
-        <h2 style={{ color: '#1e3d6b', margin: 0, fontWeight: 'bold' }}>
-          Mis Reservaciones
-        </h2>
-        
-        <button 
-          onClick={() => navigate('/Catalogo')}
-          style={{
-            backgroundColor: '#1e3d6b',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            padding: '10px 20px',
-            fontWeight: 'bold',
-            fontSize: '14px',
-            cursor: 'pointer',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
-          }}
-        >
+    <div style={{ padding: '40px', fontFamily: 'sans-serif', background: '#ffffff', minHeight: '100vh' }}>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e5e4e7', paddingBottom: '20px', marginBottom: '30px' }}>
+        <h2 style={{ color: '#1e3d6b', margin: 0, fontWeight: 'bold' }}>Mis Reservaciones</h2>
+        <button onClick={() => navigate('/Catalogo')} style={estiloBotonPrimario}>
           + Nueva Reserva
         </button>
       </div>
 
-      {/* Estructura de la Tabla */}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
-          
-          {/* Encabezados grises del Wireframe */}
-          <thead>
-            <tr style={{ background: '#f5f5f5' }}>
-              {['Código', 'Recurso', 'Fecha', 'Horario', 'Estado'].map((header) => (
-                <th key={header} style={{ 
-                  padding: '15px', 
-                  color: '#555', 
-                  fontSize: '14px', 
-                  fontWeight: 'bold',
-                  borderBottom: '1px solid #e5e4e7'
-                }}>
-                  {header}
-                </th>
-              ))}
-            </tr>
-          </thead>
+      {cargando && <p style={{ color: '#666' }}>Cargando reservaciones...</p>}
+      {error    && <p style={{ color: '#c53030' }}>{error}</p>}
 
-          {/* Filas de la Tabla sin botones de Cancelar */}
-          <tbody>
-            {misReservasBD.map((reserva, index) => (
-              <tr key={index} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                
-                {/* Código en azul */}
-                <td style={{ padding: '20px 15px', color: '#1e3d6b', fontWeight: 'bold', fontSize: '14px' }}>
-                  {reserva.código}
-                </td>
-                
-                {/* Nombre del recurso */}
-                <td style={{ padding: '20px 15px', color: '#333', fontSize: '14px' }}>
-                  {reserva.recurso}
-                </td>
-                
-                {/* Fecha */}
-                <td style={{ padding: '20px 15px', color: '#333', fontSize: '14px' }}>
-                  {reserva.fecha}
-                </td>
-                
-                {/* Horario */}
-                <td style={{ padding: '20px 15px', color: '#333', fontSize: '14px' }}>
-                  {reserva.horario}
-                </td>
-                
-                {/* Estado con Badge de Color (Activa / Cancelada) */}
-                <td style={{ padding: '20px 15px' }}>
-                  <span style={{ 
-                    backgroundColor: reserva.estado === 'Activa' ? '#e6fffa' : '#f5f5f5', 
-                    color: reserva.estado === 'Activa' ? '#2c7a7b' : '#9ca3af',
-                    padding: '6px 16px',
-                    borderRadius: '6px',
-                    fontWeight: 'bold',
-                    fontSize: '13px',
-                    display: 'inline-block'
-                  }}>
-                    {reserva.estado}
-                  </span>
-                </td>
-
-              </tr>
-            ))}
-          </tbody>
-
-        </table>
-      </div>
-
+      {!cargando && !error && (
+        reservas.length === 0
+          ? <p style={{ color: '#666' }}>No tienes reservaciones activas.</p>
+          : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f5f5f5' }}>
+                    {['Código', 'Recurso', 'Fecha', 'Horario', 'Estado', 'Acción'].map((h) => (
+                      <th key={h} style={estiloTh}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {reservas.map((r) => (
+                    <tr key={r.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                      <td style={{ ...estiloTd, color: '#1e3d6b', fontWeight: 'bold' }}>{r.codigo_reservacion}</td>
+                      <td style={estiloTd}>{r.recurso_nombre}</td>
+                      <td style={estiloTd}>{r.fecha_reserva}</td>
+                      <td style={estiloTd}>{r.hora_inicio?.slice(0,5)} - {r.hora_fin?.slice(0,5)}</td>
+                      <td style={estiloTd}>
+                        <span style={{
+                          backgroundColor: r.estado_nombre === 'activa' ? '#e6fffa' : '#f5f5f5',
+                          color: r.estado_nombre === 'activa' ? '#2c7a7b' : '#9ca3af',
+                          padding: '6px 16px', borderRadius: '6px',
+                          fontWeight: 'bold', fontSize: '13px'
+                        }}>
+                          {r.estado_nombre}
+                        </span>
+                      </td>
+                      <td style={estiloTd}>
+                        {r.estado_nombre === 'activa' && (
+                          <button onClick={() => handleCancelar(r)} style={{
+                            backgroundColor: '#fff5f5', color: '#c53030',
+                            border: '1px solid #fed7d7', borderRadius: '6px',
+                            padding: '6px 14px', fontSize: '13px',
+                            fontWeight: 'bold', cursor: 'pointer'
+                          }}>
+                            Cancelar
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+      )}
     </div>
   );
 }
+
+const estiloBotonPrimario = {
+  backgroundColor: '#1e3d6b', color: 'white', border: 'none',
+  borderRadius: '6px', padding: '10px 20px', fontWeight: 'bold',
+  fontSize: '14px', cursor: 'pointer',
+};
+const estiloTh = { padding: '15px', color: '#555', fontSize: '14px', fontWeight: 'bold', borderBottom: '1px solid #e5e4e7', textAlign: 'left' };
+const estiloTd = { padding: '18px 15px', color: '#333', fontSize: '14px' };
 
 export default MisReservaciones;

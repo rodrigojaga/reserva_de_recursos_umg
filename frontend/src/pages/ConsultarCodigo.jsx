@@ -1,166 +1,67 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { getReservas } from '../services/api';
 
 function ConsultarCodigo() {
-  const [codigoBuscado, setCodigoBuscado] = useState('');
-  const [mostrarDetalle, setMostrarDetalle] = useState(false);
+  const [codigo, setCodigo]     = useState('');
+  const [reserva, setReserva]   = useState(null);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError]       = useState('');
 
-  // Datos de prueba para simular la consulta
-  const datosReserva = {
-    código: 'RES-A3F2-202610151',
-    recurso: 'Salón A-101',
-    fecha: '15/10/2026',
-    horario: '08:00 - 10:00',
-    solicitante: 'Mario Macario',
-    estado: 'Activa'
-  };
-
-  const handleBuscar = (e) => {
+  const handleBuscar = async (e) => {
     e.preventDefault();
-    if (codigoBuscado.trim() !== '') {
-      setMostrarDetalle(true); // Activa la tarjeta de detalles abajo
-    }
+    setError(''); setReserva(null); setCargando(true);
+    try {
+      const res = await getReservas();
+      const encontrada = res.data.results.find(
+        (r) => r.codigo_reservacion.toLowerCase() === codigo.trim().toLowerCase()
+      );
+      if (encontrada) { setReserva(encontrada); }
+      else { setError('No se encontró ninguna reserva con ese código.'); }
+    } catch { setError('Error al buscar. Verifica que el servidor esté corriendo.'); }
+    finally { setCargando(false); }
   };
+
+  const estiloTarjeta = { border: '1px solid #e5e4e7', borderRadius: '12px', padding: '30px 40px', width: '550px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)', background: 'white', display: 'flex', flexDirection: 'column', gap: '12px', textAlign: 'left' };
 
   return (
-    <div style={{ 
-      padding: '40px', 
-      fontFamily: 'sans-serif', 
-      background: '#ffffff', 
-      minHeight: '100vh', 
-      textAlign: 'center',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '25px'
-    }}>
-      
-      {/* Encabezado Principal */}
-      <div style={{ marginBottom: '10px' }}>
-        <h2 style={{ color: '#1e3d6b', fontSize: '28px', fontWeight: 'bold', margin: '0 0 10px 0' }}>
-          Consultar Reservación
-        </h2>
-        <p style={{ color: '#666', fontSize: '15px', margin: 0 }}>
-          Ingresa tu código de reservación para consultar el detalle
-        </p>
+    <div style={{ padding: '40px', fontFamily: 'sans-serif', background: '#ffffff', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '25px' }}>
+      <div style={{ textAlign: 'center' }}>
+        <h2 style={{ color: '#1e3d6b', fontSize: '28px', fontWeight: 'bold', margin: '0 0 10px' }}>Consultar Reservación</h2>
+        <p style={{ color: '#666', fontSize: '15px', margin: 0 }}>Ingresa tu código de reservación para ver el detalle</p>
       </div>
 
-      {/* Caja 1: Formulario de Búsqueda */}
-      <form onSubmit={handleBuscar} style={{
-        border: '1px solid #e5e4e7',
-        borderRadius: '12px',
-        padding: '30px 40px',
-        width: '550px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
-        background: 'white',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-        textAlign: 'left'
-      }}>
-        <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>
-          Código de reservación
-        </label>
-        
+      <form onSubmit={handleBuscar} style={estiloTarjeta}>
+        <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Código de reservación</label>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-          <input 
-            type="text"
-            placeholder="Ej. RES-A3F2-20261015"
-            value={codigoBuscado}
-            onChange={(e) => setCodigoBuscado(e.target.value)}
-            style={{
-              flex: 1,
-              padding: '12px 15px',
-              borderRadius: '8px',
-              border: '1px solid #e3e3e3',
-              backgroundColor: '#f5f5f5',
-              fontSize: '14px',
-              color: '#333',
-              outline: 'none'
-            }}
-            required
-          />
-          
-          <button type="submit" style={{
-            backgroundColor: '#1e3d6b',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            padding: '12px 25px',
-            fontWeight: 'bold',
-            fontSize: '14px',
-            cursor: 'pointer',
-            minWidth: '100px'
-          }}>
-            Buscar
+          <input type="text" placeholder="Ej. RES-A3F2-2026-06-01" value={codigo} onChange={(e) => setCodigo(e.target.value)}
+            style={{ flex: 1, padding: '12px 15px', borderRadius: '8px', border: '1px solid #e3e3e3', backgroundColor: '#f5f5f5', fontSize: '14px', outline: 'none' }} required />
+          <button type="submit" disabled={cargando} style={{ backgroundColor: cargando ? '#ccc' : '#1e3d6b', color: 'white', border: 'none', borderRadius: '6px', padding: '12px 25px', fontWeight: 'bold', cursor: cargando ? 'not-allowed' : 'pointer', minWidth: '100px' }}>
+            {cargando ? '...' : 'Buscar'}
           </button>
         </div>
+        {error && <p style={{ color: '#c53030', fontSize: 13, margin: 0 }}>⚠ {error}</p>}
       </form>
 
-      {/* Caja 2: Detalle de Reservación (Aparece dinámicamente) */}
-      {mostrarDetalle && (
-        <div style={{
-          border: '1px solid #e5e4e7',
-          borderRadius: '12px',
-          padding: '30px 40px',
-          width: '550px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
-          background: 'white',
-          textAlign: 'left',
-          animation: 'fadeIn 0.3s ease-in-out'
-        }}>
-          
-          <h3 style={{ color: '#1e3d6b', fontSize: '18px', margin: '0 0 15px 0', fontWeight: 'bold' }}>
-            Detalle de Reservación
-          </h3>
+      {reserva && (
+        <div style={estiloTarjeta}>
+          <h3 style={{ color: '#1e3d6b', fontSize: '18px', margin: '0 0 15px', fontWeight: 'bold' }}>Detalle de Reservación</h3>
           <hr style={{ border: 'none', borderTop: '1px solid #e5e4e7', marginBottom: '20px' }} />
-
-          {/* Listado de características de lado a lado */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', fontSize: '14px' }}>
-            
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ width: '120px', color: '#888' }}>Código</span>
-              <strong style={{ color: '#1e3d6b', letterSpacing: '0.5px' }}>{datosReserva.código}</strong>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ width: '120px', color: '#888' }}>Recurso</span>
-              <strong style={{ color: '#333' }}>{datosReserva.recurso}</strong>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ width: '120px', color: '#888' }}>Fecha</span>
-              <strong style={{ color: '#333' }}>{datosReserva.fecha}</strong>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ width: '120px', color: '#888' }}>Horario</span>
-              <strong style={{ color: '#333' }}>{datosReserva.horario}</strong>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ width: '120px', color: '#888' }}>Solicitante</span>
-              <strong style={{ color: '#333' }}>{datosReserva.solicitante}</strong>
-            </div>
-
+            {[['Código', reserva.codigo_reservacion], ['Recurso', reserva.recurso_nombre], ['Usuario', reserva.usuario_nombre], ['Fecha', reserva.fecha_reserva], ['Horario', `${reserva.hora_inicio?.slice(0,5)} - ${reserva.hora_fin?.slice(0,5)}`]].map(([label, valor]) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center' }}>
+                <span style={{ width: '120px', color: '#888' }}>{label}</span>
+                <strong style={{ color: '#333' }}>{valor}</strong>
+              </div>
+            ))}
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <span style={{ width: '120px', color: '#888' }}>Estado</span>
-              <span style={{
-                backgroundColor: '#e6fffa',
-                color: '#2c7a7b',
-                padding: '4px 14px',
-                borderRadius: '6px',
-                fontWeight: 'bold',
-                fontSize: '12px'
-              }}>
-                {datosReserva.estado}
+              <span style={{ backgroundColor: reserva.estado_nombre === 'activa' ? '#e6fffa' : '#f5f5f5', color: reserva.estado_nombre === 'activa' ? '#2c7a7b' : '#9ca3af', padding: '4px 14px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px' }}>
+                {reserva.estado_nombre}
               </span>
             </div>
-
           </div>
-
         </div>
       )}
-
     </div>
   );
 }
