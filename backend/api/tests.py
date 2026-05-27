@@ -250,3 +250,191 @@ class TestConcurrencia_ReservaSimultanea(TransactionTestCase):
 
         self.assertEqual(len(conflictos), 1, " 1 hilo debe recibir conflicto.")
         self.assertEqual(len(errores), 0, "No debe haber errores inesperados.")
+
+
+# ──────────────────────────
+# TESTS DE PANEL ADMIN Y CSV
+# ──────────────────────────
+from rest_framework.test import APIClient
+
+class TestAdmin_PanelYCSV(TestCase):
+    """
+    Pruebas del panel administrativo:
+    - Acceso restringido por rol (header X-Admin-Key)
+    - Listado paginado de reservas
+    - Filtros por fecha, recurso y usuario
+    - Descarga del archivo CSV
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+
+        # Datos base
+        self.rol_admin    = Rol.objects.create(nombre="admin")
+        self.rol_estudiante = Rol.objects.create(nombre="estudiante")
+        tipo      = TipoRecurso.objects.create(nombre="Sala", limite_maximo_reservas=2)
+        ubicacion = Ubicacion.objects.create(nombre="Edificio A")
+        self.activa    = EstadoReserva.objects.create(nombre="activa")
+        self.cancelada = EstadoReserva.objects.create(nombre="cancelada")
+
+        self.recurso = Recurso.objects.create(
+            tipo_recurso=tipo, ubicacion=ubicacion,
+            nombre="Sala 101", capacidad=30
+        )
+
+        # Usuarios
+        self.admin = Usuario.objects.create(
+            correo="admin@miumg.edu.gt",
+            nombre_completo="Administrador",
+            rol=self.rol_admin
+        )
+        self.estudiante = Usuario.objects.create(
+            correo="alumno@miumg.edu.gt",
+            nombre_completo="Estudiante Test",
+            rol=self.rol_estudiante
+        )
+
+        # Crear algunas reservas de prueba
+        self.fecha1 = date.today() + timedelta(days=1)
+        self.fecha2 = date.today() + timedelta(days=2)
+
+        Reserva.objects.create(
+            usuario=self.estudiante, recurso=self.recurso,
+            estado=self.activa, fecha_reserva=self.fecha1,
+            hora_inicio=time(9, 0), hora_fin=time(10, 0)
+        )
+        Reserva.objects.create(
+            usuario=self.estudiante, recurso=self.recurso,
+            estado=self.activa, fecha_reserva=self.fecha2,
+            hora_inicio=time(10, 0), hora_fin=time(11, 0)
+        )
+
+    # ── Acceso restringido ────────────────────
+
+    def test_admin_01_sin_header_retorna_403(self):
+        """
+        Sin header X-Admin-Key el endpoint retorna 403.
+        Nadie sin credenciales puede acceder al panel.
+        """
+        response = self.client.get('/api/admin/reservas/')
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('error', response.data)
+
+    def test_admin_02_con_correo_estudiante_retorna_403(self):
+        """
+        Un correo de estudiante no tiene acceso al panel admin.
+        El rol debe ser 'admin' para pasar la validación.
+        """
+        response = self.client.get(
+            '/api/admin/reservas/',
+            HTTP_X_ADMIN_KEY=self.estudiante.correo
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_03_con_correo_admin_retorna_200(self):
+        """
+        Un correo de administrador válido retorna 200
+        con la estructura paginada correcta.
+        """
+        response = self.client.get(
+            '/api/admin/reservas/',
+            HTTP_X_ADMIN_KEY=self.admin.correo
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('count', response.data)
+        self.assertIn('results', response.data)
+        self.assertIn('page', response.data)
+        self.assertIn('total_pages', response.data)
+
+    # ── Filtros ───────────────────────────────
+
+    def test_admin_04_filtro_por_fecha(self):
+        """
+        El filtro ?fecha= retorna solo reservas de esa fecha.
+        """
+        response = self.client.get(
+            '/api/admin/reservas/',
+            {'fecha': self.fecha1.isoformat()},
+            HTTP_X_ADMIN_KEY=self.admin.correo
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(
+            response.data['results'][0]['fecha_reserva'],
+            self.fecha1.isoformat()
+        )
+
+    def test_admin_05_filtro_por_usuario(self):
+        """
+        El filtro ?usuario= retorna solo reservas de ese usuario.
+        """
+        response = self.client.get(
+            '/api/admin/reservas/',
+            {'usuario': self.estudiante.id},
+            HTTP_X_ADMIN_KEY=self.admin.correo
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertGreater(response.data['count'], 0)
+        for r in response.data['results']:
+            self.assertEqual(r['usuario'], self.estudiante.id)
+
+    def test_admin_06_paginacion(self):
+        """
+        La paginación limita correctamente los resultados.
+        Con page_size=1 debe retornar solo 1 resultado.
+        """
+        response = self.client.get(
+            '/api/admin/reservas/',
+            {'page': 1, 'page_size': 1},
+            HTTP_X_ADMIN_KEY=self.admin.correo
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['page_size'], 1)
+
+    # ── CSV ───────────────────────────────────
+
+    def test_admin_07_csv_sin_header_retorna_403(self):
+        """
+        El endpoint CSV también requiere X-Admin-Key.
+        """
+        response = self.client.get('/api/admin/reservas/csv/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_08_csv_retorna_content_type_correcto(self):
+        """
+        El CSV descargado debe tener Content-Type text/csv.
+        """
+        response = self.client.get(
+            '/api/admin/reservas/csv/',
+            HTTP_X_ADMIN_KEY=self.admin.correo
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('text/csv', response.get('Content-Type', ''))
+
+    def test_admin_09_csv_contiene_encabezados(self):
+        """
+        El CSV debe incluir los encabezados correctos en la primera línea.
+        """
+        response = self.client.get(
+            '/api/admin/reservas/csv/',
+            HTTP_X_ADMIN_KEY=self.admin.correo
+        )
+        contenido = response.content.decode('utf-8')
+        primera_linea = contenido.split('\r\n')[0]
+        self.assertIn('Código', primera_linea)
+        self.assertIn('Usuario', primera_linea)
+        self.assertIn('Recurso', primera_linea)
+        self.assertIn('Fecha', primera_linea)
+
+    def test_admin_10_csv_contiene_datos_reales(self):
+        """
+        El CSV debe incluir datos de las reservas existentes en BD.
+        """
+        response = self.client.get(
+            '/api/admin/reservas/csv/',
+            HTTP_X_ADMIN_KEY=self.admin.correo
+        )
+        contenido = response.content.decode('utf-8')
+        self.assertIn('Sala 101', contenido)
+        self.assertIn('Estudiante Test', contenido)
