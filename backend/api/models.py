@@ -2,9 +2,8 @@ from django.db import models
 import random
 import string
 from datetime import date, datetime
-
-from django.contrib.auth.models import AbstractUser, BaseUserManager
-from django.core.exceptions import ValidationError
+#from django.contrib.auth.models import AbstractUser, BaseUserManager
+#from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
